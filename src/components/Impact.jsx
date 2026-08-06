@@ -1,0 +1,28 @@
+export default function Impact() {
+  return (
+    <section id="impact" className="impact-section">
+      <div className="section-heading">
+        <p className="eyebrow">Business impact</p>
+        <h2>Smarter approvals, faster claim handling, and lower long-term losses.</h2>
+      </div>
+      <div className="stats-grid">
+        <div className="stat-card">
+          <strong>30%+</strong>
+          <span>Lower early default risk</span>
+        </div>
+        <div className="stat-card">
+          <strong>60%+</strong>
+          <span>Faster claim triage</span>
+        </div>
+        <div className="stat-card">
+          <strong>4x</strong>
+          <span>Improved fraud signal quality</span>
+        </div>
+        <div className="stat-card">
+          <strong>100%</strong>
+          <span>Explainable decision trails</span>
+        </div>
+      </div>
+    </section>
+  );
+}

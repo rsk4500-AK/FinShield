@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FinShield | AI Financial Protection & Lending Assistant</title>
+    <meta
+      name="description"
+      content="A unified underwriting engine that connects lending, insurance, fraud protection, and long-term financial resilience."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#home">
+        <span class="brand-mark">F</span>
+        <span>FinShield</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#workflow">Workflow</a>
+        <a href="#impact">Impact</a>
+        <a href="#contact">Contact</a>
+        <button class="nav-login" id="open-login-btn" type="button">Login</button>
+      </nav>
+    </header>
+
+    <div class="login-modal hidden" id="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+      <div class="login-modal-card">
+        <div class="login-modal-header">
+          <h2 id="login-title">Employee Login</h2>
+          <button class="btn btn-secondary close-login-btn" id="close-login-btn" type="button">Close</button>
+        </div>
+        <p class="auth-help">
+          Enter Employee ID, Email, and Password. Every login, logout, and failed attempt is recorded with an exact date and time stamp.
+        </p>
+        <div id="login-form-area"></div>
+      </div>
+    </div>
+
+    <main id="home">
+      <div id="hero-section"></div>
+      <section class="eligibility-card" aria-label="Customer eligibility check">
+        <div class="dashboard-header">
+          <div>
+            <p class="eyebrow">Eligibility check</p>
+            <h2>Customer Eligibility Check</h2>
+          </div>
+        </div>
+        <form id="eligibility-form" class="customer-form">
+          <label for="full-name">Full name of customer</label>
+          <input id="full-name" name="fullName" required />
+
+          <label for="mobile-number">Mobile number</label>
+          <input id="mobile-number" name="mobileNumber" type="tel" placeholder="9876543210" required />
+
+          <label for="requested-loan-amount">Requested loan amount</label>
+          <input id="requested-loan-amount" name="requestedLoanAmount" type="number" min="0" step="1000" required />
+
+          <label for="monthly-net-salary">Monthly net salary</label>
+          <input id="monthly-net-salary" name="monthlyNetSalary" type="number" min="0" step="100" required />
+
+          <label for="current-monthly-emi">Current monthly EMI</label>
+          <input id="current-monthly-emi" name="currentMonthlyEmi" type="number" min="0" step="100" required />
+
+          <label for="dob">Date of birth</label>
+          <input id="dob" name="dateOfBirth" type="date" required />
+
+          <label for="income-certificate-file">Income certificate</label>
+          <input id="income-certificate-file" name="incomeCertificateFile" type="file" />
+
+          <label for="salary-slip-upload">Salary slip (proof of monthly income)</label>
+          <input id="salary-slip-upload" name="salarySlipFile" type="file" />
+
+          <label for="bank-statement-upload">Bank statement (at least 3 months)</label>
+          <input id="bank-statement-upload" name="bankStatementFile" type="file" />
+
+          <label for="credit-report-upload">Credit report</label>
+          <input id="credit-report-upload" name="creditReportFile" type="file" />
+
+          <label for="life-insurance-policy-upload">Life insurance policy</label>
+          <input id="life-insurance-policy-upload" name="lifeInsurancePolicyFile" type="file" />
+
+          <label for="health-insurance-policy-upload">Health insurance policy</label>
+          <input id="health-insurance-policy-upload" name="healthInsurancePolicyFile" type="file" />
+
+          <label for="vehicle-insurance-policy-upload">Vehicle insurance policy</label>
+          <input id="vehicle-insurance-policy-upload" name="vehicleInsurancePolicyFile" type="file" />
+
+          <label for="insurance-claim-upload">Insurance claim documents</label>
+          <input id="insurance-claim-upload" name="insuranceClaimDocumentFile" type="file" />
+
+          <label for="loan-application-upload">Loan application</label>
+          <input id="loan-application-upload" name="loanApplicationFile" type="file" />
+
+          <label for="previous-loan-noc-upload">NOC of previous loans</label>
+          <input id="previous-loan-noc-upload" name="previousLoanNocFile" type="file" />
+
+          <p id="eligibility-result" class="feedback"></p>
+          <button class="btn btn-primary" type="submit">Check eligibility</button>
+        </form>
+      </section>
+      <div id="workflow-section"></div>
+      <div id="impact-section"></div>
+      <div id="contact-section"></div>
+    </main>
+
+    <footer>
+      <p>© <span id="year"></span> FinShield. Built for smarter financial protection.</p>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
