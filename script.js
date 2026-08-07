@@ -1,7 +1,10 @@
 document.getElementById('year').textContent = new Date().getFullYear();
 
 const API_BASE_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-const getApiKey = () => (window.__FINSHIELD_API_KEY__ || '');
+const getApiKey = () => {
+  const runtimeKey = window.__FINSHIELD_API_KEY__ || '';
+  return runtimeKey || '';
+};
 
 const loginModal = document.getElementById('login-modal');
 const openLoginBtn = document.getElementById('open-login-btn');
