@@ -19,6 +19,22 @@ const loadLogs = () => {
   }
 };
 
+const loadCustomerProfiles = () => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    return JSON.parse(window.localStorage.getItem('finshield-customer-profiles') || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const saveCustomerProfiles = (profiles) => {
+  if (typeof window === 'undefined') return;
+
+  window.localStorage.setItem('finshield-customer-profiles', JSON.stringify(profiles));
+};
+
 export default function App() {
   const [employeeId, setEmployeeId] = useState('');
   const [email, setEmail] = useState('');
@@ -57,6 +73,7 @@ export default function App() {
   });
   const [feedback, setFeedback] = useState('');
   const [eligibilityResult, setEligibilityResult] = useState('');
+  const [savedProfiles, setSavedProfiles] = useState(loadCustomerProfiles);
 
   const appendLog = (type, employeeIdValue, detail) => {
     const entry = {
@@ -137,7 +154,25 @@ export default function App() {
       return;
     }
 
-    setFeedback(`Customer profile prepared for ${customerForm.customerName || 'the applicant'}.`);
+    const profile = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      customerName: customerForm.customerName,
+      aadhaar: customerForm.aadhaar,
+      dob: customerForm.dob,
+      pan: customerForm.pan,
+      address: customerForm.address,
+      annualIncome: customerForm.annualIncome,
+      incomeTaxFileName: customerForm.incomeTaxFileName,
+      incomeCertificateFileName: customerForm.incomeCertificateFileName,
+      createdAt: new Date().toISOString(),
+      source: 'local-fallback',
+    };
+
+    const updatedProfiles = [profile, ...savedProfiles];
+    setSavedProfiles(updatedProfiles);
+    saveCustomerProfiles(updatedProfiles);
+
+    setFeedback(`Customer profile prepared for ${customerForm.customerName || 'the applicant'}. Stored locally until the database is reachable.`);
   };
 
   const handleEligibilitySubmit = async (event) => {
