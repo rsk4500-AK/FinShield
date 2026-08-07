@@ -5,7 +5,7 @@ import Workflow from './components/Workflow';
 import Impact from './components/Impact';
 import Contact from './components/Contact';
 
-const API_BASE_URL = 'https://integrate.api.nvidia.com/v1/models';
+const API_BASE_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
 const getApiKey = () => import.meta.env.VITE_API_KEY || '';
 
@@ -159,11 +159,36 @@ export default function App() {
       }
 
       const response = await fetch(API_BASE_URL, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
           Accept: 'application/json',
         },
+        body: JSON.stringify({
+          model: 'meta/llama-3.1-8b-instruct',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a lending risk analyst. Respond with JSON containing riskLevel, score, and explanation only.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                fullName: eligibilityForm.fullName,
+                mobileNumber: eligibilityForm.mobileNumber,
+                requestedLoanAmount: eligibilityForm.requestedLoanAmount,
+                monthlyNetSalary: eligibilityForm.monthlyNetSalary,
+                currentMonthlyEmi: eligibilityForm.currentMonthlyEmi,
+                dateOfBirth: eligibilityForm.dateOfBirth,
+                annualIncome: eligibilityForm.annualIncome,
+                incomeRatio: monthlyNet > 0 ? monthlyEmi / monthlyNet : null,
+                requestedToIncomeRatio: annualIncome > 0 ? requestedAmount / annualIncome : null,
+                ruleBasedEligible: isEligible,
+              }),
+            },
+          ],
+        }),
       });
 
       if (!response.ok) {
@@ -171,12 +196,23 @@ export default function App() {
       }
 
       const payload = await response.json();
-      const modelCount = Array.isArray(payload?.data) ? payload.data.length : 0;
+      const rawContent = payload?.choices?.[0]?.message?.content || '';
+      let assessment = null;
+
+      try {
+        assessment = JSON.parse(rawContent);
+      } catch {
+        assessment = null;
+      }
+
+      const riskLevel = assessment?.riskLevel || 'unknown';
+      const score = assessment?.score || 'n/a';
+      const explanation = assessment?.explanation || 'No detailed assessment returned.';
 
       setEligibilityResult(
         isEligible
-          ? `${eligibilityForm.fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. API connectivity confirmed (${modelCount} model${modelCount === 1 ? '' : 's'} reachable).`
-          : `${eligibilityForm.fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. API connectivity confirmed (${modelCount} model${modelCount === 1 ? '' : 's'} reachable).`
+          ? `${eligibilityForm.fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. Risk level: ${riskLevel}. Score: ${score}. ${explanation}`
+          : `${eligibilityForm.fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. Risk level: ${riskLevel}. Score: ${score}. ${explanation}`
       );
     } catch (error) {
       setEligibilityResult(

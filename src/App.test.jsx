@@ -61,10 +61,18 @@ test('shows the customer eligibility assessment form with the requested fields',
 });
 
 test('uses the configured API key when checking eligibility', async () => {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ data: [{ id: 'finshield-model' }] }),
-  });
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ id: 'meta/llama-3.1-8b-instruct' }] }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"riskLevel":"medium","score":62,"explanation":"Customer looks moderately risky based on debt load and salary."}' } }],
+      }),
+    });
 
   vi.stubEnv('VITE_API_KEY', 'test-key');
   vi.stubGlobal('fetch', fetchMock);
@@ -80,7 +88,7 @@ test('uses the configured API key when checking eligibility', async () => {
   fireEvent.click(screen.getByRole('button', { name: /check eligibility/i }));
 
   expect(fetchMock).toHaveBeenCalledWith(
-    expect.stringContaining('integrate.api.nvidia.com'),
+    'https://integrate.api.nvidia.com/v1/chat/completions',
     expect.objectContaining({
       headers: expect.objectContaining({
         Authorization: expect.stringContaining('Bearer '),
@@ -88,5 +96,5 @@ test('uses the configured API key when checking eligibility', async () => {
     })
   );
 
-  expect(await screen.findByText(/api connectivity confirmed/i)).toBeInTheDocument();
+  expect(await screen.findByText(/risk level: medium/i)).toBeInTheDocument();
 });
