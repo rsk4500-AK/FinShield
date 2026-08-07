@@ -1,5 +1,8 @@
 document.getElementById('year').textContent = new Date().getFullYear();
 
+const API_BASE_URL = 'https://integrate.api.nvidia.com/v1/models';
+const getApiKey = () => (window.__FINSHIELD_API_KEY__ || '');
+
 const loginModal = document.getElementById('login-modal');
 const openLoginBtn = document.getElementById('open-login-btn');
 const closeLoginBtn = document.getElementById('close-login-btn');
@@ -198,7 +201,7 @@ function handleCustomerSubmit(event) {
   renderLoginView();
 }
 
-function handleEligibilitySubmit(event) {
+async function handleEligibilitySubmit(event) {
   event.preventDefault();
 
   const form = event.currentTarget;
@@ -212,10 +215,38 @@ function handleEligibilitySubmit(event) {
   const isEligible = requestedAmount <= annualIncome * 0.4 && currentMonthlyEmi / Math.max(monthlyNetSalary, 1) <= 0.45 && monthlyNetSalary > 0;
   const resultText = document.getElementById('eligibility-result');
 
-  if (resultText) {
-    resultText.textContent = isEligible
-      ? `${fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details.`
-      : `${fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount.`;
+  try {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      throw new Error('Missing API key.');
+    }
+
+    const response = await fetch(API_BASE_URL, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const modelCount = Array.isArray(payload?.data) ? payload.data.length : 0;
+
+    if (resultText) {
+      resultText.textContent = isEligible
+        ? `${fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. API connectivity confirmed (${modelCount} model${modelCount === 1 ? '' : 's'} reachable).`
+        : `${fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. API connectivity confirmed (${modelCount} model${modelCount === 1 ? '' : 's'} reachable).`;
+    }
+  } catch (error) {
+    if (resultText) {
+      resultText.textContent = isEligible
+        ? `${fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. API connectivity could not be confirmed.`
+        : `${fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. API connectivity could not be confirmed.`;
+    }
   }
 }
 
