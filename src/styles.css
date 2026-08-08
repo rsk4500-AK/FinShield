@@ -313,6 +313,11 @@ footer p {
   color: var(--accent);
 }
 
+.pill.deny {
+  background: rgba(254, 202, 202, 0.24);
+  color: #b91c1c;
+}
+
 .metric-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

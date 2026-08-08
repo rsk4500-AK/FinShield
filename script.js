@@ -1,10 +1,160 @@
 document.getElementById('year').textContent = new Date().getFullYear();
 
-const API_BASE_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-const getApiKey = () => {
-  const runtimeKey = window.__FINSHIELD_API_KEY__ || '';
-  return runtimeKey || '';
-};
+const API_BASE_URL = 'http://localhost:3100/api/eligibility';
+const HERO_METRICS_ENDPOINT = 'http://localhost:3100/api/eligibility/latest';
+
+function renderHeroMetrics(metrics = {}) {
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = value;
+    }
+  };
+
+  const decisionLabel = metrics.decisionLabel || 'Pending';
+  setText('hero-decision-label', decisionLabel);
+  setText('hero-risk-score', metrics.riskScore || 'Risk N/A');
+  setText('income-stability', metrics.incomeStability || 'Pending');
+  setText('insurance-adequacy', metrics.insuranceAdequacy || 'Pending');
+  setText('fraud-signal', metrics.fraudSignal || 'Pending');
+  setText('default-probability', metrics.defaultProbability || 'Pending');
+  setText('hero-recommendation-text', metrics.recommendation || 'Complete eligibility check to update decision metrics.');
+
+  updateHeroDecisionState(decisionLabel.toLowerCase() === 'approve' ? 'approve' : decisionLabel.toLowerCase() === 'denied' ? 'deny' : 'pending');
+}
+
+function updateHeroDecisionState(state) {
+  const pill = document.getElementById('hero-decision-label');
+  if (!pill) return;
+
+  pill.textContent = state === 'approve' ? 'Approve' : 'Denied';
+  pill.classList.remove('success', 'neutral', 'deny');
+  pill.classList.add(state === 'approve' ? 'success' : 'deny');
+}
+
+function getMaxDobFor18Plus() {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 18);
+  return date.toISOString().slice(0, 10);
+}
+
+function isAdult(dateString) {
+  const dob = new Date(dateString);
+  if (!dateString || Number.isNaN(dob.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 18;
+}
+
+function setEligibilityDobMax() {
+  const dobInput = document.getElementById('dob');
+  if (dobInput) {
+    dobInput.max = getMaxDobFor18Plus();
+  }
+}
+
+function initDecisionButtons() {
+  const approveButton = document.getElementById('decision-approve-button');
+  const denyButton = document.getElementById('decision-deny-button');
+
+  if (approveButton) {
+    approveButton.addEventListener('click', () => updateHeroDecisionState('approve'));
+  }
+
+  if (denyButton) {
+    denyButton.addEventListener('click', () => updateHeroDecisionState('deny'));
+  }
+}
+
+function mapEligibilityResponseToHeroMetrics(data = {}) {
+  let assessment = data.assessment || {};
+  if (typeof assessment === 'string') {
+    try {
+      assessment = JSON.parse(assessment);
+    } catch {
+      const start = assessment.indexOf('{');
+      const end = assessment.lastIndexOf('}');
+      if (start !== -1 && end !== -1) {
+        try {
+          assessment = JSON.parse(assessment.substring(start, end + 1));
+        } catch {
+          assessment = {};
+        }
+      } else {
+        assessment = {};
+      }
+    }
+  }
+
+  const riskLevel = String((assessment && assessment.riskLevel) || 'Unknown');
+  const normalizedRiskLevel = riskLevel.trim().toLowerCase();
+  const rawScore = assessment.score;
+  const scoreText = Number.isFinite(rawScore) ? `Risk ${rawScore}` : rawScore ? `Risk ${rawScore}` : 'Risk 3-900';
+  const salaryRatio = typeof data.salaryRatio === 'number' ? data.salaryRatio : null;
+  const annualIncome = data.annualIncome != null ? data.annualIncome : null;
+  const ruleBasedEligible = data.ruleBasedEligible === true;
+
+  const incomeStability = normalizedRiskLevel === 'low'
+    ? 'Stable'
+    : normalizedRiskLevel === 'high'
+      ? 'Unstable'
+      : normalizedRiskLevel === 'medium'
+        ? 'Moderate'
+        : 'Pending';
+  const insuranceAdequacy = normalizedRiskLevel === 'low'
+    ? 'Adequate'
+    : normalizedRiskLevel === 'high'
+      ? 'Needs upgrade'
+      : normalizedRiskLevel === 'medium'
+        ? 'Needs review'
+        : 'Pending';
+  const fraudSignal = normalizedRiskLevel === 'low'
+    ? 'Low'
+    : normalizedRiskLevel === 'high'
+      ? 'Elevated'
+      : normalizedRiskLevel === 'medium'
+        ? 'Moderate'
+        : 'Pending';
+  const defaultProbability = normalizedRiskLevel === 'low'
+    ? 'Low'
+    : normalizedRiskLevel === 'high'
+      ? 'High'
+      : 'Unknown';
+  const recommendation = ruleBasedEligible
+    ? 'Approve with document verification and monitor repayment.'
+    : 'Review income and debt profile before decision.';
+
+  return {
+    decisionLabel: ruleBasedEligible ? 'Approve' : 'Review',
+    riskScore: scoreText,
+    incomeStability,
+    insuranceAdequacy,
+    fraudSignal,
+    defaultProbability,
+    recommendation,
+  };
+}
+
+async function fetchHeroMetrics() {
+  try {
+    const response = await fetch(HERO_METRICS_ENDPOINT);
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data.ok && data.record) {
+      renderHeroMetrics(mapEligibilityResponseToHeroMetrics(data.record));
+    }
+  } catch {
+    // ignore fetch failure for hero metrics
+  }
+}
 
 const loginModal = document.getElementById('login-modal');
 const openLoginBtn = document.getElementById('open-login-btn');
@@ -109,9 +259,6 @@ function renderLoginView() {
         <label for="annual-income">Income Certificate (Annual)</label>
         <input id="annual-income" name="annualIncome" type="number" min="0" step="0.01" required />
 
-        <label for="income-certificate-file">Income Certificate Attachment</label>
-        <input id="income-certificate-file" name="incomeCertificateFile" type="file" />
-
         ${loginState.feedback ? `<p class="feedback">${loginState.feedback}</p>` : ''}
         <button class="btn btn-primary" type="submit">Submit Customer</button>
       </form>
@@ -212,77 +359,149 @@ async function handleEligibilitySubmit(event) {
   const requestedAmount = Number(formData.get('requestedLoanAmount'));
   const monthlyNetSalary = Number(formData.get('monthlyNetSalary'));
   const currentMonthlyEmi = Number(formData.get('currentMonthlyEmi'));
-  const annualIncome = Number(formData.get('annualIncome'));
-  const fullName = formData.get('fullName').toString().trim();
-
-  const isEligible = requestedAmount <= annualIncome * 0.4 && currentMonthlyEmi / Math.max(monthlyNetSalary, 1) <= 0.45 && monthlyNetSalary > 0;
+  const annualIncomeValue = formData.get('annualIncome');
+  const annualIncome = annualIncomeValue ? Number(annualIncomeValue) : NaN;
+  const fullName = String(formData.get('fullName') || '').trim();
+  const dateOfBirth = String(formData.get('dateOfBirth') || '').trim();
+  const mobileNumber = String(formData.get('mobileNumber') || '').trim();
+  const salarySlipFile = formData.get('salarySlipFile');
+  const bankStatementFile = formData.get('bankStatementFile');
+  const governmentIdFile = formData.get('governmentIdFile');
+  const creditReportFile = formData.get('creditReportFile');
+  const insuranceClaimDocumentFile = formData.get('insuranceClaimDocumentFile');
+  const loanApplicationFile = formData.get('loanApplicationFile');
   const resultText = document.getElementById('eligibility-result');
 
-  try {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      throw new Error('Missing API key.');
-    }
+  if (resultText) {
+    resultText.textContent = 'Checking eligibility...';
+  }
 
+  if (!dateOfBirth || !isAdult(dateOfBirth)) {
+    if (resultText) {
+      resultText.textContent = 'Applicant must be at least 18 years old to be eligible.';
+    }
+    return;
+  }
+
+  const hasAnnualIncome = !Number.isNaN(annualIncome) && annualIncome > 0;
+  const salaryRatio = monthlyNetSalary > 0 ? currentMonthlyEmi / monthlyNetSalary : null;
+  const ruleBasedEligible = monthlyNetSalary > 0 && salaryRatio !== null && salaryRatio <= 0.45 && (hasAnnualIncome ? requestedAmount <= annualIncome * 0.4 : true);
+
+  if (!salarySlipFile || !(salarySlipFile instanceof File) || !bankStatementFile || !(bankStatementFile instanceof File) || !governmentIdFile || !(governmentIdFile instanceof File) || !creditReportFile || !(creditReportFile instanceof File) || !loanApplicationFile || !(loanApplicationFile instanceof File)) {
+    if (resultText) {
+      resultText.textContent = 'Please upload all required documents before checking eligibility.';
+    }
+    return;
+  }
+
+  const payload = {
+    fullName,
+    mobileNumber,
+    requestedLoanAmount: requestedAmount,
+    monthlyNetSalary,
+    currentMonthlyEmi,
+    dateOfBirth,
+    annualIncome: hasAnnualIncome ? annualIncome : null,
+    salarySlipFileName: salarySlipFile instanceof File ? salarySlipFile.name : '',
+    bankStatementFileName: bankStatementFile instanceof File ? bankStatementFile.name : '',
+    governmentIdFileName: governmentIdFile instanceof File ? governmentIdFile.name : '',
+    creditReportFileName: creditReportFile instanceof File ? creditReportFile.name : '',
+    insuranceClaimDocumentFileName: insuranceClaimDocumentFile instanceof File ? insuranceClaimDocumentFile.name : '',
+    loanApplicationFileName: loanApplicationFile instanceof File ? loanApplicationFile.name : '',
+    ruleBasedEligible,
+  };
+
+  try {
     const response = await fetch(API_BASE_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({
-        model: 'meta/llama-3.1-8b-instruct',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a lending risk analyst. Respond with JSON containing riskLevel, score, and explanation only.',
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              fullName,
-              requestedLoanAmount: requestedAmount,
-              monthlyNetSalary,
-              currentMonthlyEmi,
-              annualIncome,
-              incomeRatio: monthlyNetSalary > 0 ? currentMonthlyEmi / monthlyNetSalary : null,
-              requestedToIncomeRatio: annualIncome > 0 ? requestedAmount / annualIncome : null,
-              ruleBasedEligible: isEligible,
-            }),
-          },
-        ],
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      const errorBody = await response.json().catch(() => null);
+      const message = (errorBody && (errorBody.error || errorBody.message)) || 'Unexpected server error.';
+      throw new Error(message);
     }
 
-    const payload = await response.json();
-    const rawContent = payload?.choices?.[0]?.message?.content || '';
-    let assessment = null;
+    const result = await response.json();
 
+    if (!result.ok) {
+      throw new Error(result.error || 'AI eligibility check failed.');
+    }
+
+    let assessment = result.assessment;
+
+// If the backend returned a JSON string, parse it.
+if (typeof assessment === "string") {
     try {
-      assessment = JSON.parse(rawContent);
+        assessment = JSON.parse(assessment);
     } catch {
-      assessment = null;
-    }
+        const start = assessment.indexOf("{");
+        const end = assessment.lastIndexOf("}");
 
-    const riskLevel = assessment?.riskLevel || 'unknown';
-    const score = assessment?.score || 'n/a';
-    const explanation = assessment?.explanation || 'No detailed assessment returned.';
-
-    if (resultText) {
-      resultText.textContent = isEligible
-        ? `${fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. Risk level: ${riskLevel}. Score: ${score}. ${explanation}`
-        : `${fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. Risk level: ${riskLevel}. Score: ${score}. ${explanation}`;
+        if (start !== -1 && end !== -1) {
+            try {
+                assessment = JSON.parse(
+                    assessment.substring(start, end + 1)
+                );
+            } catch {
+                assessment = {};
+            }
+        } else {
+            assessment = {};
+        }
     }
+}
+
+assessment = assessment || {};
+const heroMetrics = mapEligibilityResponseToHeroMetrics(result);
+renderHeroMetrics(heroMetrics);
+
+const riskLevel = (assessment.riskLevel || "Unknown").toLowerCase();
+const displayRiskLevel = assessment.riskLevel || "Unknown";
+const score = assessment.score ?? "N/A";
+const explanation = assessment.explanation || "No explanation returned.";
+
+const warnings = [
+    ...(assessment.warnings || []),
+    ...(result.warnings || [])
+];
+
+const warningMessage = warnings.length
+    ? "\n\nWarnings:\n• " + warnings.join("\n• ")
+    : "";
+
+const eligibilityLabel = riskLevel === 'high'
+    ? 'Not Eligible'
+    : riskLevel === 'low'
+      ? 'Eligible'
+      : ruleBasedEligible
+        ? 'Eligible'
+        : 'Not Eligible';
+
+  if (resultText) {
+    resultText.classList.toggle('error', eligibilityLabel === 'Not Eligible');
+    resultText.innerHTML = `
+<b>Eligibility:</b> ${eligibilityLabel}<br><br>
+
+<b>Risk Level:</b> ${displayRiskLevel}<br>
+
+<b>Score:</b> ${score}<br><br>
+
+<b>Explanation:</b><br>
+${explanation}<br><br>
+
+<b>Warnings:</b><br>
+${warnings.length ? warnings.join("<br>") : "None"}
+`;
+}
   } catch (error) {
     if (resultText) {
-      resultText.textContent = isEligible
-        ? `${fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. API connectivity could not be confirmed.`
-        : `${fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. API connectivity could not be confirmed.`;
+      resultText.textContent = error.message || 'AI service is unavailable. Please try again later.';
     }
   }
 }
@@ -318,6 +537,8 @@ async function loadComponent(elementId, filePath) {
   await loadComponent('workflow-section', 'components/workflow.html');
   await loadComponent('impact-section', 'components/impact.html');
   await loadComponent('contact-section', 'components/contact.html');
+  await fetchHeroMetrics();
+  initDecisionButtons();
 })();
 
 renderLoginView();

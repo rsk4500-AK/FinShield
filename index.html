@@ -15,9 +15,6 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
-    <script>
-      window.__FINSHIELD_API_KEY__ = '%VITE_API_KEY%';
-    </script>
   </head>
   <body>
     <header class="topbar">
@@ -71,20 +68,20 @@
           <label for="current-monthly-emi">Current monthly EMI</label>
           <input id="current-monthly-emi" name="currentMonthlyEmi" type="number" min="0" step="100" required />
 
-          <label for="dob">Date of birth</label>
+          <label for="dob">Date of birth (must be 18+)</label>
           <input id="dob" name="dateOfBirth" type="date" required />
 
-          <label for="income-certificate-file">Income certificate</label>
-          <input id="income-certificate-file" name="incomeCertificateFile" type="file" />
-
           <label for="salary-slip-upload">Salary slip (proof of monthly income)</label>
-          <input id="salary-slip-upload" name="salarySlipFile" type="file" />
+          <input id="salary-slip-upload" name="salarySlipFile" type="file" required />
 
           <label for="bank-statement-upload">Bank statement (at least 3 months)</label>
-          <input id="bank-statement-upload" name="bankStatementFile" type="file" />
+          <input id="bank-statement-upload" name="bankStatementFile" type="file" required />
+
+          <label for="government-id-upload">Government ID</label>
+          <input id="government-id-upload" name="governmentIdFile" type="file" required />
 
           <label for="credit-report-upload">Credit report</label>
-          <input id="credit-report-upload" name="creditReportFile" type="file" />
+          <input id="credit-report-upload" name="creditReportFile" type="file" required />
 
           <label for="life-insurance-policy-upload">Life insurance policy</label>
           <input id="life-insurance-policy-upload" name="lifeInsurancePolicyFile" type="file" />
@@ -99,7 +96,7 @@
           <input id="insurance-claim-upload" name="insuranceClaimDocumentFile" type="file" />
 
           <label for="loan-application-upload">Loan application</label>
-          <input id="loan-application-upload" name="loanApplicationFile" type="file" />
+          <input id="loan-application-upload" name="loanApplicationFile" type="file" required />
 
           <label for="previous-loan-noc-upload">NOC of previous loans</label>
           <input id="previous-loan-noc-upload" name="previousLoanNocFile" type="file" />
@@ -107,6 +104,18 @@
           <p id="eligibility-result" class="feedback"></p>
           <button class="btn btn-primary" type="submit">Check eligibility</button>
         </form>
+      </section>
+      <section class="workflow-decision-section">
+        <div class="decision-box">
+          <button id="decision-approve-button" class="decision-card approve" type="button">
+            <strong>Approve</strong>
+            <p>Recommend low-risk cases, but leave the final decision to the user for loan approval or improvement.</p>
+          </button>
+          <button id="decision-deny-button" class="decision-card deny" type="button">
+            <strong>Deny</strong>
+            <p>Recommend high-risk cases for review, while the user retains final control over loan denial or modification.</p>
+          </button>
+        </div>
       </section>
       <div id="workflow-section"></div>
       <div id="impact-section"></div>

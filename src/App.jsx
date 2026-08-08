@@ -5,9 +5,8 @@ import Workflow from './components/Workflow';
 import Impact from './components/Impact';
 import Contact from './components/Contact';
 
-const API_BASE_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-
-const getApiKey = () => import.meta.env.VITE_API_KEY || '';
+const BACKEND_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3100' : '';
+const API_BASE_URL = `${BACKEND_BASE_URL}/api/eligibility`;
 
 const loadLogs = () => {
   if (typeof window === 'undefined') return [];
@@ -35,6 +34,22 @@ const saveCustomerProfiles = (profiles) => {
   window.localStorage.setItem('finshield-customer-profiles', JSON.stringify(profiles));
 };
 
+const loadPendingSync = () => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    return JSON.parse(window.localStorage.getItem('finshield-pending-sync') || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const savePendingSync = (items) => {
+  if (typeof window === 'undefined') return;
+
+  window.localStorage.setItem('finshield-pending-sync', JSON.stringify(items));
+};
+
 export default function App() {
   const [employeeId, setEmployeeId] = useState('');
   const [email, setEmail] = useState('');
@@ -50,7 +65,6 @@ export default function App() {
     address: '',
     incomeTaxFileName: '',
     annualIncome: '',
-    incomeCertificateFileName: '',
   });
   const [eligibilityForm, setEligibilityForm] = useState({
     fullName: '',
@@ -62,6 +76,7 @@ export default function App() {
     annualIncome: '',
     salarySlipFileName: '',
     bankStatementFileName: '',
+    governmentIdFileName: '',
     creditReportFileName: '',
     lifeInsurancePolicyFileName: '',
     healthInsurancePolicyFileName: '',
@@ -73,7 +88,32 @@ export default function App() {
   });
   const [feedback, setFeedback] = useState('');
   const [eligibilityResult, setEligibilityResult] = useState('');
+  const [eligibilityError, setEligibilityError] = useState(false);
   const [savedProfiles, setSavedProfiles] = useState(loadCustomerProfiles);
+  const [pendingSync, setPendingSync] = useState(loadPendingSync);
+  const [syncStatus, setSyncStatus] = useState('');
+
+  const getMaxDobFor18Plus = () => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - 18);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const getApplicantAge = (dateString) => {
+    const dob = new Date(dateString);
+    if (!dateString || Number.isNaN(dob.getTime())) {
+      return null;
+    }
+
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+
+    return age;
+  };
 
   const appendLog = (type, employeeIdValue, detail) => {
     const entry = {
@@ -163,7 +203,6 @@ export default function App() {
       address: customerForm.address,
       annualIncome: customerForm.annualIncome,
       incomeTaxFileName: customerForm.incomeTaxFileName,
-      incomeCertificateFileName: customerForm.incomeCertificateFileName,
       createdAt: new Date().toISOString(),
       source: 'local-fallback',
     };
@@ -172,7 +211,40 @@ export default function App() {
     setSavedProfiles(updatedProfiles);
     saveCustomerProfiles(updatedProfiles);
 
+    const queued = [profile, ...pendingSync];
+    setPendingSync(queued);
+    savePendingSync(queued);
+
     setFeedback(`Customer profile prepared for ${customerForm.customerName || 'the applicant'}. Stored locally until the database is reachable.`);
+  };
+
+  const handleSyncToDatabase = async () => {
+    if (pendingSync.length === 0) {
+      setSyncStatus('No pending records to sync.');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:3100/api/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ records: pendingSync }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Sync failed.');
+      }
+
+      setPendingSync([]);
+      savePendingSync([]);
+      setSyncStatus('Sync completed.');
+      appendLog('Sync completed', employeeId.trim() || 'Unknown', `Synced ${pendingSync.length} record(s) to the database.`);
+    } catch {
+      setSyncStatus('Sync failed. Records remain queued for retry.');
+      appendLog('Sync failed', employeeId.trim() || 'Unknown', 'Unable to reach the sync endpoint.');
+    }
   };
 
   const handleEligibilitySubmit = async (event) => {
@@ -181,80 +253,85 @@ export default function App() {
     const requestedAmount = Number(eligibilityForm.requestedLoanAmount);
     const monthlyNet = Number(eligibilityForm.monthlyNetSalary);
     const monthlyEmi = Number(eligibilityForm.currentMonthlyEmi);
-    const annualIncome = Number(eligibilityForm.annualIncome);
+    const annualIncome = eligibilityForm.annualIncome ? Number(eligibilityForm.annualIncome) : null;
 
-    const salaryRatio = monthlyEmi / Math.max(monthlyNet, 1);
-    const isEligible = requestedAmount <= annualIncome * 0.4 && salaryRatio <= 0.45 && monthlyNet > 0;
+    const applicantAge = getApplicantAge(eligibilityForm.dateOfBirth);
+    if (applicantAge === null) {
+      setEligibilityResult('Please enter a valid date of birth.');
+      return;
+    }
+
+    if (applicantAge < 18) {
+      setEligibilityResult('Applicant must be at least 18 years old to be eligible.');
+      return;
+    }
+
+    const salaryRatio = monthlyNet > 0 ? monthlyEmi / monthlyNet : null;
+    const ruleBasedEligible = monthlyNet > 0 && salaryRatio !== null && salaryRatio <= 0.45 && (annualIncome ? requestedAmount <= annualIncome * 0.4 : true);
+    const warnings = [];
+
+    if (!annualIncome) {
+      warnings.push('Annual income not provided. AI assessment is based only on entered financial information.');
+    }
 
     try {
-      const apiKey = getApiKey();
-
-      if (!apiKey) {
-        throw new Error('Missing API key.');
-      }
-
       const response = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          model: 'meta/llama-3.1-8b-instruct',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a lending risk analyst. Respond with JSON containing riskLevel, score, and explanation only.',
-            },
-            {
-              role: 'user',
-              content: JSON.stringify({
-                fullName: eligibilityForm.fullName,
-                mobileNumber: eligibilityForm.mobileNumber,
-                requestedLoanAmount: eligibilityForm.requestedLoanAmount,
-                monthlyNetSalary: eligibilityForm.monthlyNetSalary,
-                currentMonthlyEmi: eligibilityForm.currentMonthlyEmi,
-                dateOfBirth: eligibilityForm.dateOfBirth,
-                annualIncome: eligibilityForm.annualIncome,
-                incomeRatio: monthlyNet > 0 ? monthlyEmi / monthlyNet : null,
-                requestedToIncomeRatio: annualIncome > 0 ? requestedAmount / annualIncome : null,
-                ruleBasedEligible: isEligible,
-              }),
-            },
-          ],
+          fullName: eligibilityForm.fullName,
+          mobileNumber: eligibilityForm.mobileNumber,
+          requestedLoanAmount: requestedAmount,
+          monthlyNetSalary: eligibilityForm.monthlyNetSalary,
+          currentMonthlyEmi: eligibilityForm.currentMonthlyEmi,
+          dateOfBirth: eligibilityForm.dateOfBirth,
+          annualIncome: annualIncome || null,
+          salarySlipFileName: eligibilityForm.salarySlipFileName || null,
+          bankStatementFileName: eligibilityForm.bankStatementFileName || null,
+          creditReportFileName: eligibilityForm.creditReportFileName || null,
+          insuranceClaimDocumentFileName: eligibilityForm.insuranceClaimDocumentFileName || null,
+          loanApplicationFileName: eligibilityForm.loanApplicationFileName || null,
+          previousLoanNocFileName: eligibilityForm.previousLoanNocFileName || null,
+          ruleBasedEligible,
+          warnings,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const errorBody = await response.json().catch(() => null);
+        const message = (errorBody && (errorBody.error || errorBody.message)) || 'Unexpected server error.';
+        throw new Error(message);
       }
 
-      const payload = await response.json();
-      const rawContent = payload?.choices?.[0]?.message?.content || '';
-      let assessment = null;
-
-      try {
-        assessment = JSON.parse(rawContent);
-      } catch {
-        assessment = null;
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || 'AI eligibility check failed.');
       }
 
-      const riskLevel = assessment?.riskLevel || 'unknown';
-      const score = assessment?.score || 'n/a';
-      const explanation = assessment?.explanation || 'No detailed assessment returned.';
+      const assessment = result.assessment || {};
+      const riskLevel = assessment.riskLevel || 'unknown';
+      const normalizedRiskLevel = riskLevel.toLowerCase();
+      const score = assessment.score ?? 'n/a';
+      const explanation = assessment.explanation || 'No detailed assessment returned.';
+      const responseWarnings = Array.isArray(result.warnings) ? result.warnings : [];
+      const warningMessage = responseWarnings.length ? ` ${responseWarnings.join(' ')}` : '';
 
-      setEligibilityResult(
-        isEligible
-          ? `${eligibilityForm.fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. Risk level: ${riskLevel}. Score: ${score}. ${explanation}`
-          : `${eligibilityForm.fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. Risk level: ${riskLevel}. Score: ${score}. ${explanation}`
-      );
+      const eligibilityMessage = normalizedRiskLevel === 'high'
+        ? `${eligibilityForm.fullName || 'Applicant'} is not eligible due to high risk. Risk level: ${riskLevel}. Score: ${score}. ${explanation}${warningMessage}`
+        : normalizedRiskLevel === 'low'
+          ? `${eligibilityForm.fullName || 'Applicant'} appears eligible for the requested loan amount. Risk level: ${riskLevel}. Score: ${score}. ${explanation}${warningMessage}`
+          : ruleBasedEligible
+            ? `${eligibilityForm.fullName || 'Applicant'} appears eligible for the requested loan amount. Risk level: ${riskLevel}. Score: ${score}. ${explanation}${warningMessage}`
+            : `${eligibilityForm.fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. Risk level: ${riskLevel}. Score: ${score}. ${explanation}${warningMessage}`;
+
+      setEligibilityError(riskLevel.toLowerCase() === 'high');
+      setEligibilityResult(eligibilityMessage);
     } catch (error) {
-      setEligibilityResult(
-        isEligible
-          ? `${eligibilityForm.fullName || 'Applicant'} appears eligible for the requested loan amount based on the provided income and EMI details. API connectivity could not be confirmed.`
-          : `${eligibilityForm.fullName || 'Applicant'} does not meet the current eligibility threshold. Please review income, EMI, or requested amount. API connectivity could not be confirmed.`
-      );
+      setEligibilityError(true);
+      setEligibilityResult(error.message || 'AI service is unavailable. Please try again later.');
     }
   };
 
@@ -350,11 +427,12 @@ export default function App() {
                 <label htmlFor="annualIncome">Income Certificate (Annual)</label>
                 <input id="annualIncome" name="annualIncome" type="number" min="0" step="0.01" value={customerForm.annualIncome} onChange={handleCustomerInput} required />
 
-                <label htmlFor="incomeCertificateFile">Income Certificate Attachment</label>
-                <input id="incomeCertificateFile" name="incomeCertificateFileName" type="file" onChange={handleCustomerFile} />
-
                 {feedback ? <p className="feedback">{feedback}</p> : null}
-                <button className="btn btn-primary" type="submit">Submit Customer</button>
+                <div className="dashboard-actions">
+                  <button className="btn btn-primary" type="submit">Submit Customer</button>
+                  <button className="btn btn-secondary" type="button" onClick={handleSyncToDatabase}>Sync to Database</button>
+                </div>
+                {syncStatus ? <p className="feedback">{syncStatus}</p> : null}
               </form>
 
               <div className="logs-panel">
@@ -395,20 +473,20 @@ export default function App() {
             <label htmlFor="currentMonthlyEmi">Current monthly EMI</label>
             <input id="currentMonthlyEmi" name="currentMonthlyEmi" type="number" min="0" step="100" value={eligibilityForm.currentMonthlyEmi} onChange={handleEligibilityInput} required />
 
-            <label htmlFor="dateOfBirth">Date of birth</label>
-            <input id="dateOfBirth" name="dateOfBirth" type="date" value={eligibilityForm.dateOfBirth} onChange={handleEligibilityInput} required />
-
-            <label htmlFor="incomeCertificate">Income certificate</label>
-            <input id="incomeCertificate" name="incomeCertificate" type="file" onChange={handleEligibilityFile} />
+<label htmlFor="dateOfBirth">Date of birth (must be 18+)</label>
+                <input id="dateOfBirth" name="dateOfBirth" type="date" max={getMaxDobFor18Plus()} value={eligibilityForm.dateOfBirth} onChange={handleEligibilityInput} required />
 
             <label htmlFor="salarySlipUpload">Salary slip (proof of monthly income)</label>
-            <input id="salarySlipUpload" name="salarySlipFileName" type="file" onChange={handleEligibilityFile} />
+            <input id="salarySlipUpload" name="salarySlipFileName" type="file" onChange={handleEligibilityFile} required />
 
             <label htmlFor="bankStatementUpload">Bank statement (at least 3 months)</label>
-            <input id="bankStatementUpload" name="bankStatementFileName" type="file" onChange={handleEligibilityFile} />
+            <input id="bankStatementUpload" name="bankStatementFileName" type="file" onChange={handleEligibilityFile} required />
+
+            <label htmlFor="governmentIdUpload">Government ID</label>
+            <input id="governmentIdUpload" name="governmentIdFileName" type="file" onChange={handleEligibilityFile} required />
 
             <label htmlFor="creditReportUpload">Credit report</label>
-            <input id="creditReportUpload" name="creditReportFileName" type="file" onChange={handleEligibilityFile} />
+            <input id="creditReportUpload" name="creditReportFileName" type="file" onChange={handleEligibilityFile} required />
 
             <label htmlFor="lifeInsurancePolicyUpload">Life insurance policy</label>
             <input id="lifeInsurancePolicyUpload" name="lifeInsurancePolicyFileName" type="file" onChange={handleEligibilityFile} />
@@ -423,12 +501,12 @@ export default function App() {
             <input id="insuranceClaimUpload" name="insuranceClaimDocumentFileName" type="file" onChange={handleEligibilityFile} />
 
             <label htmlFor="loanApplicationUpload">Loan application</label>
-            <input id="loanApplicationUpload" name="loanApplicationFileName" type="file" onChange={handleEligibilityFile} />
+            <input id="loanApplicationUpload" name="loanApplicationFileName" type="file" onChange={handleEligibilityFile} required />
 
             <label htmlFor="previousLoanNocUpload">NOC of previous loans</label>
             <input id="previousLoanNocUpload" name="previousLoanNocFileName" type="file" onChange={handleEligibilityFile} />
 
-            {eligibilityResult ? <p className="feedback">{eligibilityResult}</p> : null}
+            {eligibilityResult ? <p className={`feedback ${eligibilityError ? 'error' : ''}`}>{eligibilityResult}</p> : null}
             <button className="btn btn-primary" type="submit">Check eligibility</button>
           </form>
         </section>

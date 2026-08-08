@@ -145,6 +145,10 @@ a {
   font-weight: 600;
 }
 
+.feedback.error {
+  color: #dc2626;
+}
+
 .dashboard-panel {
   display: grid;
   gap: 1rem;
@@ -295,7 +299,12 @@ footer p {
 
 .pill.neutral {
   background: rgba(124, 140, 255, 0.16);
-  color: #dfe4ff;
+  color: #3b82f6;
+}
+
+.pill.deny {
+  background: rgba(254, 202, 202, 0.24);
+  color: #b91c1c;
 }
 
 .metric-row {
@@ -339,6 +348,46 @@ footer p {
 
 .section-heading {
   margin-bottom: 1rem;
+}
+
+.decision-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.decision-card {
+  display: block;
+  width: 100%;
+  border-radius: 22px;
+  padding: 1.3rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.decision-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.decision-card strong {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-size: 1.05rem;
+}
+
+.decision-card.approve {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.decision-card.deny {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .workflow-grid,

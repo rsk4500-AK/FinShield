@@ -19,33 +19,33 @@
 
   <div class="hero-card" aria-label="FinShield decision dashboard preview">
     <div class="card-top">
-      <span class="pill success">Approve</span>
-      <span class="pill neutral">Risk 22/100</span>
+      <span class="pill success" id="hero-decision-label">Pending</span>
+      <span class="pill neutral" id="hero-risk-score">Risk 3-900</span>
     </div>
     <h3>Customer decision snapshot</h3>
     <div class="metric-row">
       <div>
         <strong>Income stability</strong>
-        <p>High</p>
+        <p id="income-stability">Pending</p>
       </div>
       <div>
         <strong>Insurance adequacy</strong>
-        <p>Needs upgrade</p>
+        <p id="insurance-adequacy">Pending</p>
       </div>
     </div>
     <div class="metric-row">
       <div>
         <strong>Fraud signal</strong>
-        <p>Low</p>
+        <p id="fraud-signal">Pending</p>
       </div>
       <div>
         <strong>Default probability</strong>
-        <p>Low</p>
+        <p id="default-probability">Pending</p>
       </div>
     </div>
     <div class="recommendation">
       <h4>Recommended action</h4>
-      <p>Approve with a lower sanctioned amount and request stronger medical coverage.</p>
+      <p id="hero-recommendation-text">Complete eligibility check to update decision metrics.</p>
     </div>
   </div>
 </section>

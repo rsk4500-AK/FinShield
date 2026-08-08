@@ -22,7 +22,7 @@ export default function Hero() {
       <div className="hero-card" aria-label="FinShield decision dashboard preview">
         <div className="card-top">
           <span className="pill success">Approve</span>
-          <span className="pill neutral">Risk 22/100</span>
+          <span className="pill neutral">Risk 3-900</span>
         </div>
         <h3>Customer decision snapshot</h3>
         <div className="metric-row">

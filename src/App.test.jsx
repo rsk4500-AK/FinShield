@@ -60,6 +60,39 @@ test('shows the customer eligibility assessment form with the requested fields',
   expect(screen.getByLabelText(/date of birth/i)).toBeInTheDocument();
 });
 
+test('syncs queued onboarding records to the remote endpoint', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(<App />);
+
+  fireEvent.click(screen.getByRole('button', { name: /^login$/i }));
+  fireEvent.change(screen.getByLabelText(/employee id/i), { target: { value: 'EMP-1001' } });
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'user@example.com' } });
+  fireEvent.click(screen.getAllByRole('button', { name: /login/i })[1]);
+
+  fireEvent.change(screen.getByLabelText(/customer name/i), { target: { value: 'Priya Nair' } });
+  fireEvent.change(screen.getByLabelText(/aadhaar card number/i), { target: { value: '123456789012' } });
+  fireEvent.change(screen.getAllByLabelText(/date of birth/i)[0], { target: { value: '1992-04-10' } });
+  fireEvent.change(screen.getByLabelText(/pan card number/i), { target: { value: 'ABCDE1234F' } });
+  fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main Street' } });
+  fireEvent.change(screen.getByLabelText(/income certificate \(annual\)/i), { target: { value: '800000' } });
+  fireEvent.click(screen.getByRole('button', { name: /submit customer/i }));
+  fireEvent.click(screen.getByRole('button', { name: /sync to database/i }));
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/sync',
+    expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        'Content-Type': 'application/json',
+      }),
+    })
+  );
+
+  expect(await screen.findByText('Sync completed.')).toBeInTheDocument();
+});
+
 test('uses the configured API key when checking eligibility', async () => {
   const fetchMock = vi
     .fn()
@@ -84,7 +117,7 @@ test('uses the configured API key when checking eligibility', async () => {
   fireEvent.change(screen.getByLabelText(/requested loan amount/i), { target: { value: '500000' } });
   fireEvent.change(screen.getByLabelText(/monthly net salary/i), { target: { value: '100000' } });
   fireEvent.change(screen.getByLabelText(/current monthly emi/i), { target: { value: '20000' } });
-  fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+  fireEvent.change(screen.getByLabelText(/^date of birth$/i), { target: { value: '1990-01-01' } });
   fireEvent.click(screen.getByRole('button', { name: /check eligibility/i }));
 
   expect(fetchMock).toHaveBeenCalledWith(
